@@ -1,0 +1,181 @@
+// package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"stcal/stc"
+)
+
+func main() {
+	// Command line flags
+	exercisePrice := flag.Float64("exprice", 0, "Exercise price per share")
+	exercisedShares := flag.Float64("exshares", 0, "Number of shares exercised")
+	fmv := flag.Float64("fmv", 0, "Fair Market Value per share")
+
+	federal := flag.Float64("federal", 0.22, "Federal tax rate")
+	medicare := flag.Float64("medicare", 0.0145, "Medicare tax rate")
+	socialSec := flag.Float64("social", 0.062, "Social Security tax rate")
+	state := flag.Float64("state", 0.0, "State tax rate")
+	localSDI := flag.Float64("local", 0.0, "Local/SDI tax rate")
+
+	commissionRate := flag.Float64("commission", 0.03, "Broker commission rate")
+	minimumFee := flag.Float64("fee", 25.0, "Minimum broker fee")
+
+	jsonOutput := flag.Bool("json", false, "Output result as JSON")
+	csvInput := flag.String("csv-in", "", "CSV file with multiple inputs")
+	csvOutput := flag.String("csv-out", "", "CSV file to write batch results")
+
+	flag.Parse()
+
+	// Create calculator with custom configuration
+	config := stc.Config{
+		TaxRates: stc.TaxRates{
+			Federal:   *federal,
+			Medicare:  *medicare,
+			SocialSec: *socialSec,
+			State:     *state,
+			LocalSDI:  *localSDI,
+		},
+		BrokerFees: stc.BrokerFees{
+			CommissionRate: *commissionRate,
+			MinimumFee:     *minimumFee,
+		},
+	}
+
+	calculator := stc.NewCalculator(config)
+
+	// Handle CSV batch processing
+	if *csvInput != "" {
+		processBatchCSV(calculator, *csvInput, *csvOutput)
+		return
+	}
+
+	// Validate single calculation inputs
+	if *exercisePrice <= 0 || *exercisedShares <= 0 || *fmv <= 0 {
+		flag.Usage()
+		fmt.Fprintf(os.Stderr, "\nError: exercise-price, exercised-shares, and fmv must all be greater than 0\n")
+		os.Exit(1)
+	}
+
+	// Perform single calculation
+	input := stc.Input{
+		ExercisePrice:   *exercisePrice,
+		ExercisedShares: *exercisedShares,
+		FMV:             *fmv,
+	}
+
+	result := calculator.Calculate(input)
+
+	// Output result
+	if *jsonOutput {
+		jsonStr, err := result.ToJSON()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(jsonStr)
+	} else {
+		printDetailedResult(result)
+	}
+}
+
+func processBatchCSV(calculator *stc.Calculator, inputPath, outputPath string) {
+	// Read input CSV
+	inputFile, err := os.Open(inputPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening input file: %v\n", err)
+		os.Exit(1)
+	}
+	defer inputFile.Close()
+
+	inputs, err := stc.FromCSV(inputFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading CSV: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Calculate batch
+	batchResult := calculator.CalculateBatch(inputs)
+
+	// Print summary
+	fmt.Println(batchResult.Summarize().String())
+	fmt.Println()
+
+	// Write output CSV if specified
+	if outputPath != "" {
+		outputFile, err := os.Create(outputPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating output file: %v\n", err)
+			os.Exit(1)
+		}
+		defer outputFile.Close()
+
+		if err := batchResult.ToCSV(outputFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing CSV: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Results written to %s\n", outputPath)
+	}
+}
+
+func printDetailedResult(result stc.Result) {
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Println("STC CALCULATOR RESULT")
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Println()
+
+	fmt.Println("Input Parameters:")
+	fmt.Printf("  Exercise Price:    $%.2f\n", result.ExercisePrice)
+	fmt.Printf("  Exercised Shares:  %.2f\n", result.ExercisedShares)
+	fmt.Printf("  FMV:               $%.2f\n", result.FMV)
+	fmt.Println()
+
+	fmt.Println("Cost Breakdown:")
+	fmt.Printf("  Option Cost:       $%.2f\n", result.OptionCost)
+	fmt.Printf("  Taxable Gain:      $%.2f\n", result.TaxableGain)
+	fmt.Println()
+
+	fmt.Println("Tax Breakdown:")
+	fmt.Printf("  Federal Tax:       $%.2f\n", result.FederalTax)
+	fmt.Printf("  Medicare Tax:      $%.2f\n", result.MedicareTax)
+	fmt.Printf("  Social Sec Tax:    $%.2f\n", result.SocialSecTax)
+	fmt.Printf("  State Tax:         $%.2f\n", result.StateTax)
+	fmt.Printf("  Local/SDI Tax:     $%.2f\n", result.LocalSDITax)
+	fmt.Printf("  Total Tax:         $%.2f\n", result.TotalTax)
+	fmt.Println()
+
+	fmt.Println("Broker Fees:")
+	fmt.Printf("  Commission:        $%.2f\n", result.BrokerCommission)
+	fmt.Printf("  Applied Fees:      $%.2f\n", result.BrokerFees)
+	fmt.Println()
+
+	fmt.Println("Final Calculations:")
+	fmt.Printf("  Total Costs:       $%.2f\n", result.TotalCosts)
+	fmt.Printf("  Shares To Sell:    %.0f\n", result.SharesToSell)
+	fmt.Printf("  Est. Gross:        $%.2f\n", result.EstGrossProceeds)
+	fmt.Printf("  Residual:          $%.2f\n", result.Residual)
+	fmt.Printf("  Net Shares:        %.0f\n", result.NetShares)
+	fmt.Println()
+	fmt.Println(strings.Repeat("=", 60))
+}
+
+func init() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "STC Calculator - Sell To Cover Calculator\n\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  Single calculation:\n")
+		fmt.Fprintf(os.Stderr, "    %s -exercise-price X -exercised-shares Y -fmv Z [options]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  Batch calculation:\n")
+		fmt.Fprintf(os.Stderr, "    %s -csv-input input.csv [-csv-output output.csv] [options]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  %s -exercise-price 10 -exercised-shares 50 -fmv 20\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -exercise-price 10 -exercised-shares 50 -fmv 20 -json\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -csv-input data.csv -csv-output results.csv\n", os.Args[0])
+	}
+}
