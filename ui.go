@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"strconv"
 
@@ -16,8 +17,12 @@ import (
 	"stc2go/stc" // Ensure this matches your module name (e.g., go.mod module name)
 )
 
+//go:embed appicon.png
+var appIcon []byte
+
 func main() {
 	myApp := app.New()
+	myApp.SetIcon(fyne.NewStaticResource("appicon.png", appIcon))
 	myWindow := myApp.NewWindow("EXERCISE")
 	myWindow.Resize(fyne.NewSize(500, 700))
 	myApp.Settings().SetTheme(newCustomTheme())
