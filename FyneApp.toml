@@ -1,0 +1,8 @@
+Website = "https://github.com/limpdev/stc2go"
+
+[Details]
+Icon = "appicon.png"
+Name = "stc2go"
+ID = "com.limpdev.stc2go"
+Version = "1.0.0"
+Build = 4

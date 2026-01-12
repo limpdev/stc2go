@@ -7,17 +7,17 @@
 	<key>CFBundleExecutable</key>
 	<string>stc2go</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.example.stc2go</string>
+	<string>com.limpdev.stc2go</string>
 	<key>CFBundleIconFile</key>
 	<string>icon.icns</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.0.1</string>
+	<string>1.0.0</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>3</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
