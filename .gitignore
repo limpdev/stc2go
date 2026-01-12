@@ -112,6 +112,7 @@ Godeps/
 /out-tsc
 *.o
 *.a
+*.app
 
 # Misc
 .sass-cache/
