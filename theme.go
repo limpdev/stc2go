@@ -21,7 +21,7 @@ func (ct *customTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant
 	case theme.ColorNamePrimary:
 		return color.NRGBA{R: 70, G: 130, B: 180, A: 255} // Steel Blue
 	case theme.ColorNameForeground:
-		return color.NRGBA{R: 255, G: 255, B: 255, A: 255} // White text in entries
+		return color.NRGBA{R: 220, G: 220, B: 220, A: 255} // White text in entries
 	case theme.ColorNameInputBackground:
 		return color.NRGBA{R: 40, G: 40, B: 40, A: 255} // Dark background for entries
 	case theme.ColorNameSuccess:

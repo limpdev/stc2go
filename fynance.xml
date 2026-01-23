@@ -1,0 +1,888 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: **/*.go
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+stc/
+  batch.go
+  config.go
+main.go
+theme.go
+ui.go
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="main.go">
+package main
+
+import (
+	_ "embed"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+)
+
+//go:embed appicon.png
+var appIcon []byte
+
+func main() {
+	myApp := app.New()
+	myApp.SetIcon(fyne.NewStaticResource("appicon.png", appIcon))
+	myWindow := myApp.NewWindow("Fynance")
+	myWindow.Resize(fyne.NewSize(600, 750)) // Slightly larger for the tabs
+	myApp.Settings().SetTheme(newCustomTheme())
+
+	// Create the individual tool interfaces
+	stcTab := makeSTCTab(myWindow)
+	calcTab := makeCalculatorTab()
+
+	// Create the navigation tabs
+	tabs := container.NewAppTabs(
+		container.NewTabItemWithIcon("Sell To Cover", theme.DocumentIcon(), stcTab),
+		container.NewTabItemWithIcon("Calculator", theme.ContentAddIcon(), calcTab),
+	)
+
+	tabs.SetTabLocation(container.TabLocationTop)
+
+	myWindow.SetContent(tabs)
+	myWindow.ShowAndRun()
+}
+</file>
+
+<file path="stc/batch.go">
+package stc
+
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"strconv"
+)
+
+// BatchInput represents a batch of STC calculations
+type BatchInput struct {
+	Inputs []Input
+}
+
+// BatchResult represents results from a batch of STC calculations
+type BatchResult struct {
+	Results []Result
+}
+
+// CalculateBatch processes multiple STC calculations at once
+func (c *Calculator) CalculateBatch(inputs []Input) BatchResult {
+	results := make([]Result, len(inputs))
+	for i, input := range inputs {
+		results[i] = c.Calculate(input)
+	}
+	return BatchResult{Results: results}
+}
+
+// CSVRow represents a row in the CSV export
+type CSVRow struct {
+	ExercisePrice    string
+	ExercisedShares  string
+	FMV              string
+	SharesToSell     string
+	NetShares        string
+	TotalCosts       string
+	EstGrossProceeds string
+	TaxableGain      string
+	TotalTax         string
+}
+
+// ToCSV writes batch results to a CSV writer
+func (br BatchResult) ToCSV(w io.Writer) error {
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{
+		"Exercise Price",
+		"Exercised Shares",
+		"FMV",
+		"Shares To Sell",
+		"Net Shares",
+		"Total Costs",
+		"Est. Gross Proceeds",
+		"Taxable Gain",
+		"Total Tax",
+		"Option Cost",
+		"Broker Fees",
+	}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+
+	// Write data rows
+	for _, result := range br.Results {
+		row := []string{
+			fmt.Sprintf("%.2f", result.ExercisePrice),
+			fmt.Sprintf("%.2f", result.ExercisedShares),
+			fmt.Sprintf("%.2f", result.FMV),
+			fmt.Sprintf("%.4f", result.SharesToSell),
+			fmt.Sprintf("%.4f", result.NetShares),
+			fmt.Sprintf("%.2f", result.TotalCosts),
+			fmt.Sprintf("%.2f", result.EstGrossProceeds),
+			fmt.Sprintf("%.2f", result.TaxableGain),
+			fmt.Sprintf("%.2f", result.TotalTax),
+			fmt.Sprintf("%.2f", result.OptionCost),
+			fmt.Sprintf("%.2f", result.BrokerFees),
+		}
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("failed to write row: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// FromCSV reads inputs from a CSV reader
+func FromCSV(r io.Reader) ([]Input, error) {
+	reader := csv.NewReader(r)
+
+	// Skip header
+	if _, err := reader.Read(); err != nil {
+		return nil, fmt.Errorf("failed to read header: %w", err)
+	}
+
+	var inputs []Input
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read row: %w", err)
+		}
+
+		if len(record) < 3 {
+			continue // Skip invalid rows
+		}
+
+		exercisePrice, err := strconv.ParseFloat(record[0], 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid exercise price: %w", err)
+		}
+
+		exercisedShares, err := strconv.ParseFloat(record[1], 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid exercised shares: %w", err)
+		}
+
+		fmv, err := strconv.ParseFloat(record[2], 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid FMV: %w", err)
+		}
+
+		inputs = append(inputs, Input{
+			ExercisePrice:   exercisePrice,
+			ExercisedShares: exercisedShares,
+			FMV:             fmv,
+		})
+	}
+
+	return inputs, nil
+}
+
+// Summary provides aggregate statistics for a batch of results
+type Summary struct {
+	TotalExercisedShares float64
+	TotalSharesToSell    float64
+	TotalNetShares       float64
+	TotalCosts           float64
+	TotalTaxes           float64
+	TotalBrokerFees      float64
+	AverageFMV           float64
+	Count                int
+}
+
+// Summarize generates aggregate statistics from batch results
+func (br BatchResult) Summarize() Summary {
+	if len(br.Results) == 0 {
+		return Summary{}
+	}
+
+	summary := Summary{
+		Count: len(br.Results),
+	}
+
+	for _, result := range br.Results {
+		summary.TotalExercisedShares += result.ExercisedShares
+		summary.TotalSharesToSell += result.SharesToSell
+		summary.TotalNetShares += result.NetShares
+		summary.TotalCosts += result.TotalCosts
+		summary.TotalTaxes += result.TotalTax
+		summary.TotalBrokerFees += result.BrokerFees
+		summary.AverageFMV += result.FMV
+	}
+
+	summary.AverageFMV /= float64(summary.Count)
+
+	return summary
+}
+
+// String returns a formatted string representation of the summary
+func (s Summary) String() string {
+	return fmt.Sprintf(
+		"Batch Summary (%d calculations):\n"+
+			"  Total Exercised Shares: %.2f\n"+
+			"  Total Shares To Sell:   %.2f\n"+
+			"  Total Net Shares:       %.2f\n"+
+			"  Total Costs:            $%.2f\n"+
+			"  Total Taxes:            $%.2f\n"+
+			"  Total Broker Fees:      $%.2f\n"+
+			"  Average FMV:            $%.2f",
+		s.Count,
+		s.TotalExercisedShares,
+		s.TotalSharesToSell,
+		s.TotalNetShares,
+		s.TotalCosts,
+		s.TotalTaxes,
+		s.TotalBrokerFees,
+		s.AverageFMV,
+	)
+}
+</file>
+
+<file path="stc/config.go">
+package stc
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+)
+
+// Config holds the static configuration for STC calculations
+type Config struct {
+	TaxRates   TaxRates   `json:"taxRates"`
+	BrokerFees BrokerFees `json:"brokerFees"`
+}
+
+// TaxRates represents tax rate configuration
+type TaxRates struct {
+	Federal   float64 `json:"federal"`
+	Medicare  float64 `json:"medicare"`
+	SocialSec float64 `json:"socialSec"`
+	State     float64 `json:"state"`
+	LocalSDI  float64 `json:"localSdi"`
+}
+
+// BrokerFees represents broker fee configuration
+type BrokerFees struct {
+	CommissionRate float64 `json:"commissionRate"`
+	MinimumFee     float64 `json:"minimumFee"`
+}
+
+// Input represents the user-provided inputs for STC calculation
+type Input struct {
+	ExercisePrice   float64 `json:"exercisePrice"`
+	ExercisedShares float64 `json:"exercisedShares"`
+	FMV             float64 `json:"fmv"`
+}
+
+// Result contains all calculated values from the STC calculation
+type Result struct {
+	// Input values
+	ExercisePrice   float64 `json:"exercisePrice"`
+	ExercisedShares float64 `json:"exercisedShares"`
+	FMV             float64 `json:"fmv"`
+
+	// Calculated costs
+	OptionCost   float64 `json:"optionCost"`
+	TaxableGain  float64 `json:"taxableGain"`
+	FederalTax   float64 `json:"federalTax"`
+	MedicareTax  float64 `json:"medicareTax"`
+	SocialSecTax float64 `json:"socialSecTax"`
+	StateTax     float64 `json:"stateTax"`
+	LocalSDITax  float64 `json:"localSdiTax"`
+	TotalTax     float64 `json:"totalTax"`
+
+	// Broker fees
+	BrokerCommission float64 `json:"brokerCommission"`
+	BrokerFees       float64 `json:"brokerFees"`
+
+	// Final calculations
+	TotalCosts       float64 `json:"totalCosts"`
+	SharesToSell     float64 `json:"sharesToSell"`
+	EstGrossProceeds float64 `json:"estGrossProceeds"`
+	Residual         float64 `json:"residual"`
+	NetShares        float64 `json:"netShares"`
+}
+
+// Calculator handles STC calculations with a given configuration
+type Calculator struct {
+	config Config
+}
+
+// NewCalculator creates a new STC calculator with the given configuration
+func NewCalculator(config Config) *Calculator {
+	return &Calculator{config: config}
+}
+
+// NewDefaultCalculator creates a calculator with default tax rates and broker fees
+func NewDefaultCalculator() *Calculator {
+	return &Calculator{
+		config: Config{
+			TaxRates: TaxRates{
+				Federal:   0.22,
+				Medicare:  0.0145,
+				SocialSec: 0.062,
+				State:     0.0,
+				LocalSDI:  0.0,
+			},
+			BrokerFees: BrokerFees{
+				CommissionRate: 0.03,
+				MinimumFee:     25.0,
+			},
+		},
+	}
+}
+
+// Calculate performs the STC calculation
+func (c *Calculator) Calculate(input Input) Result {
+	result := Result{
+		ExercisePrice:   input.ExercisePrice,
+		ExercisedShares: input.ExercisedShares,
+		FMV:             input.FMV,
+	}
+
+	// Calculate option cost and taxable gain
+	result.OptionCost = roundMoney(input.ExercisedShares * input.ExercisePrice)
+	result.TaxableGain = roundMoney((input.FMV - input.ExercisePrice) * input.ExercisedShares)
+
+	// Calculate taxes
+	// Note: We round these individually to simulate real-world line-item accounting
+	result.FederalTax = roundMoney(result.TaxableGain * c.config.TaxRates.Federal)
+	result.MedicareTax = roundMoney(result.TaxableGain * c.config.TaxRates.Medicare)
+	result.SocialSecTax = roundMoney(result.TaxableGain * c.config.TaxRates.SocialSec)
+	result.StateTax = roundMoney(result.TaxableGain * c.config.TaxRates.State)
+	result.LocalSDITax = roundMoney(result.TaxableGain * c.config.TaxRates.LocalSDI)
+
+	result.TotalTax = result.FederalTax + result.MedicareTax + result.SocialSecTax +
+		result.StateTax + result.LocalSDITax
+
+	// --- LOGIC FIX START ---
+
+	// Base liability (Costs excluding broker fees)
+	baseLiability := result.OptionCost + result.TotalTax
+
+	// Initialize loop variables
+	sharesToSell := 0.0
+
+	// Initial guess: Cost / FMV, rounded UP to nearest whole number
+	if input.FMV > 0 {
+		sharesToSell = math.Ceil(baseLiability / input.FMV)
+	}
+
+	// Iteratively adjust for broker fees
+	// We loop because adding a share to cover fees might increase fees enough
+	// to require yet another share (edge case, but possible).
+	const maxIterations = 100
+
+	for i := 0; i < maxIterations; i++ {
+		// 1. Calculate fees based on current WHOLE share count
+		brokerCommission := sharesToSell * c.config.BrokerFees.CommissionRate
+		brokerFeesApplied := math.Max(brokerCommission, c.config.BrokerFees.MinimumFee)
+
+		// 2. Calculate Total Liability
+		totalCosts := baseLiability + brokerFeesApplied
+
+		// 3. Calculate new required shares (Rounded UP)
+		newSharesToSell := math.Ceil(totalCosts / input.FMV)
+
+		// 4. Check for stability
+		if newSharesToSell == sharesToSell {
+			// Logic has stabilized
+			result.SharesToSell = sharesToSell
+			result.BrokerCommission = brokerCommission
+			result.BrokerFees = brokerFeesApplied
+			result.TotalCosts = totalCosts
+			break
+		}
+
+		sharesToSell = newSharesToSell
+	}
+
+	// Final Calculations
+	// Gross Proceeds come from the WHOLE shares sold
+	result.EstGrossProceeds = result.SharesToSell * input.FMV
+
+	// Residual is the cash left over
+	result.Residual = result.EstGrossProceeds - result.TotalCosts
+
+	// Net shares is simple subtraction
+	result.NetShares = input.ExercisedShares - result.SharesToSell
+
+	// --- LOGIC FIX END ---
+
+	return result
+}
+
+// UpdateTaxRates updates the tax rate configuration
+func (c *Calculator) UpdateTaxRates(rates TaxRates) {
+	c.config.TaxRates = rates
+}
+
+// UpdateBrokerFees updates the broker fee configuration
+func (c *Calculator) UpdateBrokerFees(fees BrokerFees) {
+	c.config.BrokerFees = fees
+}
+
+// GetConfig returns the current configuration
+func (c *Calculator) GetConfig() Config {
+	return c.config
+}
+
+// ToJSON converts the result to JSON string
+func (r Result) ToJSON() (string, error) {
+	bytes, err := json.MarshalIndent(r, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
+// String returns a formatted string representation of the result
+func (r Result) String() string {
+	return fmt.Sprintf(
+		"STC Result: %.4f shares to sell, $%.2f net proceeds, %.4f net shares remaining",
+		r.SharesToSell,
+		r.EstGrossProceeds-r.TotalCosts,
+		r.NetShares,
+	)
+}
+
+// roundMoney rounds a float64 to 2 decimal places for monetary values
+func roundMoney(val float64) float64 {
+	return math.Round(val*100) / 100
+}
+</file>
+
+<file path="theme.go">
+package main
+
+import (
+	"image/color"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
+)
+
+type customTheme struct {
+	fyne.Theme
+}
+
+func newCustomTheme() fyne.Theme {
+	return &customTheme{Theme: theme.DefaultTheme()}
+}
+
+func (ct *customTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	// Edit these color mappings as needed
+	switch name {
+	case theme.ColorNamePrimary:
+		return color.NRGBA{R: 70, G: 130, B: 180, A: 255} // Steel Blue
+	case theme.ColorNameForeground:
+		return color.NRGBA{R: 220, G: 220, B: 220, A: 255} // White text in entries
+	case theme.ColorNameInputBackground:
+		return color.NRGBA{R: 40, G: 40, B: 40, A: 255} // Dark background for entries
+	case theme.ColorNameSuccess:
+		return color.NRGBA{R: 50, G: 205, B: 50, A: 255} // Lime Green
+	case theme.ColorNameError:
+		return color.NRGBA{R: 220, G: 20, B: 60, A: 255} // Crimson
+	default:
+		return ct.Theme.Color(name, variant)
+	}
+}
+</file>
+
+<file path="ui.go">
+package main
+
+import (
+	_ "embed"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
+
+	"fynance/stc" // Ensure this matches your module name (e.g., go.mod module name)
+)
+
+func makeSTCTab(win fyne.Window) fyne.CanvasObject {
+	// --- INPUT FIELDS ---
+
+	// Transaction Inputs
+	exSharesEntry := newEntry("0", "Exercised Shares")
+	exPriceEntry := newEntry("0.00", "Exercise Price")
+	fmvEntry := newEntry("0.00", "Fair Market Value")
+
+	// Tax Inputs
+	fedTaxEntry := newEntry("0.22", "Federal Rate (0.22)")
+	medTaxEntry := newEntry("0.0145", "Medicare Rate (0.0145)")
+	ssTaxEntry := newEntry("0.062", "Social Security Rate (0.062)")
+	stateTaxEntry := newEntry("0.00", "State Rate (e.g. 0.09)")
+	localTaxEntry := newEntry("0.00", "Local/SDI Rate")
+
+	// Broker Inputs
+	commRateEntry := newEntry("0.03", "Commission Rate (0.03)")
+	minFeeEntry := newEntry("25.00", "Min Fee (25.00)")
+
+	// --- OUTPUT LABELS ---
+
+	lblNetShares := canvas.NewText("-", theme.PrimaryColor())
+	lblNetShares.TextSize = 24
+	lblNetShares.TextStyle = fyne.TextStyle{Bold: true}
+
+	lblResidual := canvas.NewText("-", theme.SuccessColor())
+	lblResidual.TextSize = 24
+	lblResidual.TextStyle = fyne.TextStyle{Bold: true}
+
+	lblSharesSold := widget.NewLabel("-")
+	lblTotalCost := widget.NewLabel("-")
+	lblGrossProceeds := widget.NewLabel("-")
+	lblTaxes := widget.NewLabel("-")
+	lblFees := widget.NewLabel("-")
+
+	// --- LOGIC ---
+
+	calculateFunc := func() {
+		exPrice, err1 := parseFloat(exPriceEntry.Text)
+		fmv, err3 := parseFloat(fmvEntry.Text)
+		exShares, err2 := parseFloat(exSharesEntry.Text)
+
+		fed, _ := parseFloat(fedTaxEntry.Text)
+		med, _ := parseFloat(medTaxEntry.Text)
+		ss, _ := parseFloat(ssTaxEntry.Text)
+		state, _ := parseFloat(stateTaxEntry.Text)
+		local, _ := parseFloat(localTaxEntry.Text)
+
+		comm, _ := parseFloat(commRateEntry.Text)
+		minFee, _ := parseFloat(minFeeEntry.Text)
+
+		if err1 != nil || err2 != nil || err3 != nil {
+			dialog.ShowError(fmt.Errorf("Please enter valid numbers for Price, Shares, and FMV"), win)
+			return
+		}
+
+		if exPrice <= 0 || exShares <= 0 || fmv <= 0 {
+			dialog.ShowError(fmt.Errorf("Price, Shares, and FMV must be greater than 0"), win)
+			return
+		}
+
+		config := stc.Config{
+			TaxRates: stc.TaxRates{
+				Federal:   fed,
+				Medicare:  med,
+				SocialSec: ss,
+				State:     state,
+				LocalSDI:  local,
+			},
+			BrokerFees: stc.BrokerFees{
+				CommissionRate: comm,
+				MinimumFee:     minFee,
+			},
+		}
+
+		calculator := stc.NewCalculator(config)
+		input := stc.Input{
+			ExercisePrice:   exPrice,
+			ExercisedShares: exShares,
+			FMV:             fmv,
+		}
+
+		result := calculator.Calculate(input)
+
+		lblNetShares.Text = fmt.Sprintf("%.0f", result.NetShares)
+		lblNetShares.Refresh()
+		lblResidual.Text = fmt.Sprintf("$%.2f", result.Residual)
+		lblResidual.Refresh()
+		lblSharesSold.SetText(fmt.Sprintf("%.0f", result.SharesToSell))
+		lblTotalCost.SetText(fmt.Sprintf("$%.2f", result.TotalCosts))
+		lblGrossProceeds.SetText(fmt.Sprintf("$%.2f", result.EstGrossProceeds))
+		lblTaxes.SetText(fmt.Sprintf("$%.2f", result.TotalTax))
+		lblFees.SetText(fmt.Sprintf("$%.2f", result.BrokerFees))
+	}
+
+	// --- LAYOUT ---
+
+	calcBtn := widget.NewButtonWithIcon("CALCULATE", theme.ConfirmIcon(), calculateFunc)
+	calcBtn.Importance = widget.HighImportance
+
+	transForm := widget.NewForm(
+		widget.NewFormItem("Exercise Price ($)", exPriceEntry),
+		widget.NewFormItem("FMV ($)", fmvEntry),
+		widget.NewFormItem("Exercised Shares", exSharesEntry),
+	)
+
+	taxForm := widget.NewForm(
+		widget.NewFormItem("Federal Rate", fedTaxEntry),
+		widget.NewFormItem("Medicare Rate", medTaxEntry),
+		widget.NewFormItem("Social Sec Rate", ssTaxEntry),
+		widget.NewFormItem("State Rate", stateTaxEntry),
+		widget.NewFormItem("Local/SDI Rate", localTaxEntry),
+	)
+
+	brokerForm := widget.NewForm(
+		widget.NewFormItem("Commission Rate", commRateEntry),
+		widget.NewFormItem("Minimum Fee ($)", minFeeEntry),
+	)
+
+	inputTabs := container.NewAppTabs(
+		container.NewTabItem("Base", transForm),
+		container.NewTabItem("Taxes", taxForm),
+		container.NewTabItem("Service", brokerForm),
+	)
+
+	inputCard := widget.NewCard("Configuration", "", container.NewVBox(
+		inputTabs,
+		layout.NewSpacer(),
+		calcBtn,
+	))
+
+	resultRow := func(label string, valueObj fyne.CanvasObject) *fyne.Container {
+		return container.New(layout.NewFormLayout(), widget.NewLabel(label), valueObj)
+	}
+
+	summaryContainer := container.NewVBox(
+		resultRow("Net Shares (To Keep):", lblNetShares),
+		resultRow("Residual Cash:", lblResidual),
+	)
+
+	detailsContainer := container.NewVBox(
+		widget.NewSeparator(),
+		resultRow("Shares Sold to Cover:", lblSharesSold),
+		resultRow("Gross Proceeds:", lblGrossProceeds),
+		widget.NewSeparator(),
+		resultRow("Total Taxes:", lblTaxes),
+		resultRow("Broker Fees:", lblFees),
+		resultRow("Total Costs:", lblTotalCost),
+	)
+
+	resultCard := widget.NewCard("Calculation Results", "Sell-To-Cover Breakdown",
+		container.NewVBox(
+			summaryContainer,
+			detailsContainer,
+		),
+	)
+
+	content := container.NewVBox(
+		inputCard,
+		layout.NewSpacer(),
+		resultCard,
+	)
+
+	return container.NewPadded(content)
+}
+
+// --- TOOL 2: Standard Calculator ---
+
+func makeCalculatorTab() fyne.CanvasObject {
+	// State
+	var currentNum string = "0"
+	var storedNum float64 = 0
+	var currentOp string = ""
+	var lastWasOp bool = false
+
+	// Widgets
+	display := widget.NewLabel("0")
+	display.TextStyle = fyne.TextStyle{Monospace: true, Bold: true}
+	display.Alignment = fyne.TextAlignTrailing
+
+	history := widget.NewLabel("")
+	history.TextStyle = fyne.TextStyle{Monospace: true}
+	history.Alignment = fyne.TextAlignTrailing
+	// Logic Helper
+	updateDisplay := func() {
+		display.SetText(currentNum)
+	}
+
+	calculate := func() {
+		if currentOp == "" {
+			return
+		}
+		val, _ := strconv.ParseFloat(currentNum, 64)
+		var result float64
+
+		switch currentOp {
+		case "+":
+			result = storedNum + val
+		case "-":
+			result = storedNum - val
+		case "*":
+			result = storedNum * val
+		case "/":
+			if val == 0 {
+				currentNum = "Error"
+				updateDisplay()
+				return
+			}
+			result = storedNum / val
+		}
+
+		// Format result to avoid hanging decimals if whole number
+		if result == float64(int64(result)) {
+			currentNum = fmt.Sprintf("%.0f", result)
+		} else {
+			currentNum = fmt.Sprintf("%g", result)
+		}
+		currentOp = ""
+		updateDisplay()
+	}
+
+	// Button Actions
+	onNum := func(n string) {
+		if lastWasOp {
+			currentNum = "0"
+			lastWasOp = false
+		}
+		if currentNum == "0" && n != "." {
+			currentNum = n
+		} else {
+			if n == "." && strings.Contains(currentNum, ".") {
+				return
+			}
+			currentNum += n
+		}
+		updateDisplay()
+	}
+
+	onOp := func(op string) {
+		if currentOp != "" && !lastWasOp {
+			calculate()
+		}
+		var err error
+		storedNum, err = strconv.ParseFloat(currentNum, 64)
+		if err != nil {
+			currentNum = "0"
+		}
+		currentOp = op
+		lastWasOp = true
+		history.SetText(fmt.Sprintf("%g %s", storedNum, currentOp))
+	}
+
+	onClear := func() {
+		currentNum = "0"
+		storedNum = 0
+		currentOp = ""
+		lastWasOp = false
+		history.SetText("")
+		updateDisplay()
+	}
+
+	onEq := func() {
+		history.SetText("")
+		calculate()
+		lastWasOp = true // Treat result as a starting point
+	}
+
+	// Layout Construction
+	// Helper to make buttons uniform
+	btn := func(label string, action func()) *widget.Button {
+		b := widget.NewButton(label, action)
+		return b
+	}
+
+	// Number pad
+	grid := container.NewGridWithColumns(4,
+		// Row 1
+		btn("C", onClear), btn("", func() {}), btn("", func() {}), btn("/", func() { onOp("/") }),
+		// Row 2
+		btn("7", func() { onNum("7") }), btn("8", func() { onNum("8") }), btn("9", func() { onNum("9") }), btn("*", func() { onOp("*") }),
+		// Row 3
+		btn("4", func() { onNum("4") }), btn("5", func() { onNum("5") }), btn("6", func() { onNum("6") }), btn("-", func() { onOp("-") }),
+		// Row 4
+		btn("1", func() { onNum("1") }), btn("2", func() { onNum("2") }), btn("3", func() { onNum("3") }), btn("+", func() { onOp("+") }),
+		// Row 5
+		btn("0", func() { onNum("0") }), btn(".", func() { onNum(".") }), btn("", func() {}), widget.NewButtonWithIcon("=", theme.ConfirmIcon(), onEq),
+	)
+
+	// Make operators visually distinct (optional, depends on theme but HighImportance helps)
+	for _, o := range grid.Objects {
+		if b, ok := o.(*widget.Button); ok {
+			if b.Text == "=" {
+				b.Importance = widget.HighImportance
+			}
+		}
+	}
+
+	screen := container.NewBorder(
+		container.NewVBox(
+			widget.NewCard("", "", container.NewVBox(history, display)),
+			widget.NewSeparator(),
+		),
+		nil, nil, nil,
+		container.NewPadded(grid),
+	)
+
+	return screen
+}
+
+// --- SHARED HELPERS ---
+func newEntry(placeholder, label string) *widget.Entry {
+	e := widget.NewEntry()
+	e.SetPlaceHolder(placeholder)
+	e.Text = placeholder
+	return e
+}
+
+func parseFloat(s string) (float64, error) {
+	if s == "" {
+		return 0, nil
+	}
+	return strconv.ParseFloat(s, 64)
+}
+</file>
+
+</files>

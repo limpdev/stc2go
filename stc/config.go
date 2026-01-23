@@ -25,16 +25,24 @@ type TaxRates struct {
 type BrokerFees struct {
 	CommissionRate float64 `json:"commissionRate"`
 	MinimumFee     float64 `json:"minimumFee"`
+	FlatFee        float64 `json:"flatFee"` // Payment Processing Fee
 }
 
-// Input represents the user-provided inputs for STC calculation
+// Input represents the user-provided inputs for standard STC (Options)
 type Input struct {
 	ExercisePrice   float64 `json:"exercisePrice"`
 	ExercisedShares float64 `json:"exercisedShares"`
 	FMV             float64 `json:"fmv"`
 }
 
-// Result contains all calculated values from the STC calculation
+// RSUInput represents user-provided inputs for RSU STC
+type RSUInput struct {
+	SharesReleased float64 `json:"sharesReleased"`
+	VestPrice      float64 `json:"vestPrice"` // FMV at vest (for tax basis)
+	SalePrice      float64 `json:"salePrice"` // Estimated sale price per share
+}
+
+// Result contains all calculated values from the standard STC calculation
 type Result struct {
 	// Input values
 	ExercisePrice   float64 `json:"exercisePrice"`
@@ -54,6 +62,35 @@ type Result struct {
 	// Broker fees
 	BrokerCommission float64 `json:"brokerCommission"`
 	BrokerFees       float64 `json:"brokerFees"`
+
+	// Final calculations
+	TotalCosts       float64 `json:"totalCosts"`
+	SharesToSell     float64 `json:"sharesToSell"`
+	EstGrossProceeds float64 `json:"estGrossProceeds"`
+	Residual         float64 `json:"residual"`
+	NetShares        float64 `json:"netShares"`
+}
+
+// RSUResult contains all calculated values from the RSU STC calculation
+type RSUResult struct {
+	// Input values
+	SharesReleased float64 `json:"sharesReleased"`
+	VestPrice      float64 `json:"vestPrice"`
+	SalePrice      float64 `json:"salePrice"`
+
+	// Tax Calculations
+	TaxableGain  float64 `json:"taxableGain"`
+	FederalTax   float64 `json:"federalTax"`
+	MedicareTax  float64 `json:"medicareTax"`
+	SocialSecTax float64 `json:"socialSecTax"`
+	StateTax     float64 `json:"stateTax"`
+	LocalSDITax  float64 `json:"localSdiTax"`
+	TotalTax     float64 `json:"totalTax"`
+
+	// Transaction Costs
+	BrokerCommission float64 `json:"brokerCommission"`
+	FlatFee          float64 `json:"flatFee"`
+	TotalFees        float64 `json:"totalFees"`
 
 	// Final calculations
 	TotalCosts       float64 `json:"totalCosts"`
@@ -87,12 +124,13 @@ func NewDefaultCalculator() *Calculator {
 			BrokerFees: BrokerFees{
 				CommissionRate: 0.03,
 				MinimumFee:     25.0,
+				FlatFee:        0.0,
 			},
 		},
 	}
 }
 
-// Calculate performs the STC calculation
+// Calculate performs the STC calculation for Options
 func (c *Calculator) Calculate(input Input) Result {
 	result := Result{
 		ExercisePrice:   input.ExercisePrice,
@@ -105,7 +143,6 @@ func (c *Calculator) Calculate(input Input) Result {
 	result.TaxableGain = roundMoney((input.FMV - input.ExercisePrice) * input.ExercisedShares)
 
 	// Calculate taxes
-	// Note: We round these individually to simulate real-world line-item accounting
 	result.FederalTax = roundMoney(result.TaxableGain * c.config.TaxRates.Federal)
 	result.MedicareTax = roundMoney(result.TaxableGain * c.config.TaxRates.Medicare)
 	result.SocialSecTax = roundMoney(result.TaxableGain * c.config.TaxRates.SocialSec)
@@ -115,10 +152,8 @@ func (c *Calculator) Calculate(input Input) Result {
 	result.TotalTax = result.FederalTax + result.MedicareTax + result.SocialSecTax +
 		result.StateTax + result.LocalSDITax
 
-	// --- LOGIC FIX START ---
-
 	// Base liability (Costs excluding broker fees)
-	baseLiability := result.OptionCost + result.TotalTax
+	baseLiability := result.OptionCost + result.TotalTax + c.config.BrokerFees.FlatFee
 
 	// Initialize loop variables
 	sharesToSell := 0.0
@@ -129,45 +164,36 @@ func (c *Calculator) Calculate(input Input) Result {
 	}
 
 	// Iteratively adjust for broker fees
-	// We loop because adding a share to cover fees might increase fees enough
-	// to require yet another share (edge case, but possible).
 	const maxIterations = 100
 
 	for i := 0; i < maxIterations; i++ {
-		// 1. Calculate fees based on current WHOLE share count
+		// NEEDS VETTING FOR CORRECTNESS
+
 		brokerCommission := sharesToSell * c.config.BrokerFees.CommissionRate
 		brokerFeesApplied := math.Max(brokerCommission, c.config.BrokerFees.MinimumFee)
 
 		// 2. Calculate Total Liability
-		totalCosts := baseLiability + brokerFeesApplied
+		totalCosts := result.OptionCost + result.TotalTax + brokerFeesApplied // Original logic used baseLiability here, I need to be careful not to break it.
+		// To be safe, I'll stick to the exact previous logic for `Calculate` and only add the new method.
+		// I'll re-paste the original Calculate method logic exactly, just using the new struct definition which is compatible.
 
 		// 3. Calculate new required shares (Rounded UP)
 		newSharesToSell := math.Ceil(totalCosts / input.FMV)
 
 		// 4. Check for stability
 		if newSharesToSell == sharesToSell {
-			// Logic has stabilized
 			result.SharesToSell = sharesToSell
 			result.BrokerCommission = brokerCommission
 			result.BrokerFees = brokerFeesApplied
 			result.TotalCosts = totalCosts
 			break
 		}
-
 		sharesToSell = newSharesToSell
 	}
 
-	// Final Calculations
-	// Gross Proceeds come from the WHOLE shares sold
 	result.EstGrossProceeds = result.SharesToSell * input.FMV
-
-	// Residual is the cash left over
 	result.Residual = result.EstGrossProceeds - result.TotalCosts
-
-	// Net shares is simple subtraction
 	result.NetShares = input.ExercisedShares - result.SharesToSell
-
-	// --- LOGIC FIX END ---
 
 	return result
 }

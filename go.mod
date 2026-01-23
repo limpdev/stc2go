@@ -1,4 +1,4 @@
-module stc2go
+module fynance
 
 go 1.25.1
 
