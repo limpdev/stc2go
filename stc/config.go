@@ -98,6 +98,7 @@ type RSUResult struct {
 	EstGrossProceeds float64 `json:"estGrossProceeds"`
 	Residual         float64 `json:"residual"`
 	NetShares        float64 `json:"netShares"`
+	// NetSharesFormatted string  `json:"netSharesFormatted"`
 }
 
 // Calculator handles STC calculations with a given configuration
@@ -236,3 +237,8 @@ func (r Result) String() string {
 func roundMoney(val float64) float64 {
 	return math.Round(val*100) / 100
 }
+
+// func (r RSUResult) FormattedNetShares() string {
+// 	p := message.NewPrinter(language.English)
+// 	return p.Sprintf("%.2f", r.NetShares)
+// }

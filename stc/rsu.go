@@ -1,6 +1,8 @@
 package stc
 
-import "math"
+import (
+	"math"
+)
 
 // CalculateRSU performs the STC calculation for Restricted Stock Units
 func (c *Calculator) CalculateRSU(input RSUInput) RSUResult {
@@ -25,8 +27,9 @@ func (c *Calculator) CalculateRSU(input RSUInput) RSUResult {
 
 	// 3. Base Liability (Taxes + Flat Fees)
 	// Processing fees are added to the liability we must cover by selling shares.
-	baseLiability := result.TotalTax + c.config.BrokerFees.FlatFee
-
+	// baseLiability := result.TotalTax + c.config.BrokerFees.FlatFee
+	// baseFee := c.config.BrokerFees.FlatFee
+	baseBurden := result.TotalTax
 	// 4. Iterative Solver for Shares to Sell
 	// We need to cover: BaseLiability + Commission
 	// Commission depends on Gross Proceeds (SharesSold * SalePrice)
@@ -35,7 +38,7 @@ func (c *Calculator) CalculateRSU(input RSUInput) RSUResult {
 
 	// Initial guess
 	if input.SalePrice > 0 {
-		sharesToSell = math.Ceil(baseLiability / input.SalePrice)
+		sharesToSell = math.Ceil(baseBurden / input.SalePrice)
 	}
 
 	const maxIterations = 100
@@ -75,7 +78,7 @@ func (c *Calculator) CalculateRSU(input RSUInput) RSUResult {
 
 	// 5. Finalize Results
 	result.Residual = result.EstGrossProceeds - result.TotalCosts
-	result.NetShares = input.SharesReleased - result.SharesToSell
+	result.NetShares = result.SharesReleased - result.SharesToSell
 
 	return result
 }

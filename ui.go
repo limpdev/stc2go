@@ -19,7 +19,6 @@ import (
 
 // --- TOOL 1: Sell To Cover (Options) ---
 func makeSTCTab(win fyne.Window) fyne.CanvasObject {
-	// ... (Keep existing code logic, just wrapped in this function) ...
 	// --- INPUT FIELDS ---
 	exSharesEntry := newEntry("0", "Exercised Shares")
 	exPriceEntry := newEntry("0.00", "Exercise Price")
@@ -142,29 +141,32 @@ func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 		calcBtn,
 	))
 
-	resultRow := func(label string, valueObj fyne.CanvasObject) *fyne.Container {
-		return container.New(layout.NewFormLayout(), widget.NewLabel(label), valueObj)
-	}
-
-	summaryContainer := container.NewVBox(
-		resultRow("Net Shares:", lblNetShares),
-		resultRow("Residual:", lblResidual),
+	// Result Layout using Grid
+	// Summary in a 2-column top row
+	summaryGrid := container.NewGridWithColumns(2,
+		container.New(layout.NewFormLayout(), widget.NewLabel("Net Shares:"), lblNetShares),
+		container.New(layout.NewFormLayout(), widget.NewLabel("Residual:"), lblResidual),
 	)
 
-	detailsContainer := container.NewVBox(
-		widget.NewSeparator(),
-		resultRow("Shares Sold to Cover:", lblSharesSold),
-		resultRow("Gross Proceeds:", lblGrossProceeds),
-		widget.NewSeparator(),
-		resultRow("Total Taxes:", lblTaxes),
-		resultRow("Broker Fees:", lblFees),
-		resultRow("Total Costs:", lblTotalCost),
+	// Details in a 2-column grid
+	detailsLeft := widget.NewForm(
+		widget.NewFormItem("Shares Sold:", lblSharesSold),
+		widget.NewFormItem("Gross Proceeds:", lblGrossProceeds),
 	)
 
-	resultCard := widget.NewCard("Results", "SO Breakdown",
+	detailsRight := widget.NewForm(
+		widget.NewFormItem("Total Taxes:", lblTaxes),
+		widget.NewFormItem("Broker Fees:", lblFees),
+		widget.NewFormItem("Total Costs:", lblTotalCost),
+	)
+
+	detailsGrid := container.NewGridWithColumns(2, detailsLeft, detailsRight)
+
+	resultCard := widget.NewCard("Results", "Options",
 		container.NewVBox(
-			summaryContainer,
-			detailsContainer,
+			summaryGrid,
+			widget.NewSeparator(),
+			detailsGrid,
 		),
 	)
 
@@ -312,30 +314,31 @@ func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 		calcBtn,
 	))
 
-	resultRow := func(label string, valueObj fyne.CanvasObject) *fyne.Container {
-		return container.New(layout.NewFormLayout(), widget.NewLabel(label), valueObj)
-	}
-
-	summaryContainer := container.NewVBox(
-		resultRow("Net Shares Delivered:", lblNetShares),
-		resultRow("Residual Cash:", lblResidual),
+	// Result Layout using Grid
+	summaryGrid := container.NewGridWithColumns(2,
+		container.New(layout.NewFormLayout(), widget.NewLabel("Net Shares:"), lblNetShares),
+		container.New(layout.NewFormLayout(), widget.NewLabel("Residual:"), lblResidual),
 	)
 
-	detailsContainer := container.NewVBox(
-		widget.NewSeparator(),
-		resultRow("Taxable Gain:", lblTaxableGain),
-		resultRow("Shares Sold to Cover:", lblSharesSold),
-		resultRow("Gross Proceeds:", lblGrossProceeds),
-		widget.NewSeparator(),
-		resultRow("Total Taxes:", lblTaxes),
-		resultRow("Total Fees:", lblFees),
-		resultRow("Total Costs:", lblTotalCost),
+	detailsLeft := widget.NewForm(
+		widget.NewFormItem("Taxable Gain:", lblTaxableGain),
+		widget.NewFormItem("Shares Sold:", lblSharesSold),
+		widget.NewFormItem("Gross Proceeds:", lblGrossProceeds),
 	)
 
-	resultCard := widget.NewCard("Calculation Results", "RSU Breakdown",
+	detailsRight := widget.NewForm(
+		widget.NewFormItem("Total Taxes:", lblTaxes),
+		widget.NewFormItem("Total Fees:", lblFees),
+		widget.NewFormItem("Total Costs:", lblTotalCost),
+	)
+
+	detailsGrid := container.NewGridWithColumns(2, detailsLeft, detailsRight)
+
+	resultCard := widget.NewCard("Results", "Restricted Stock",
 		container.NewVBox(
-			summaryContainer,
-			detailsContainer,
+			summaryGrid,
+			widget.NewSeparator(),
+			detailsGrid,
 		),
 	)
 
@@ -351,7 +354,6 @@ func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 // --- TOOL 2: Standard Calculator ---
 
 func makeCalculatorTab() fyne.CanvasObject {
-	// ... (Existing Calculator Code - No Changes Needed) ...
 	// State
 	var currentNum string = "0"
 	var storedNum float64 = 0
