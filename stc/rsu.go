@@ -44,7 +44,8 @@ func (c *Calculator) CalculateRSU(input RSUInput) RSUResult {
 	const maxIterations = 100
 	for i := 0; i < maxIterations; i++ {
 		// Calculate Gross Proceeds for current guess
-		grossProceeds := sharesToSell * input.SalePrice
+		sharesReleased := input.SharesReleased
+		grossProceeds := (sharesReleased - sharesToSell) * input.SalePrice
 
 		// Calculate Commission
 		// Assumes CommissionRate is a percentage (e.g., 0.03 for 3%)
@@ -77,7 +78,7 @@ func (c *Calculator) CalculateRSU(input RSUInput) RSUResult {
 	}
 
 	// 5. Finalize Results
-	result.Residual = result.EstGrossProceeds - result.TotalCosts
+	result.Residual = (sharesToSell * input.SalePrice) - result.TotalCosts
 	result.NetShares = result.SharesReleased - result.SharesToSell
 
 	return result

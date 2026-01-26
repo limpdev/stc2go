@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -17,20 +18,66 @@ import (
 	"fynance/stc"
 )
 
+// --- CUSTOM WIDGET: SmartEntry ---
+// SmartEntry extends widget.Entry to handle Enter/Return keys for submission
+// while preserving standard shortcuts (Ctrl+A, Tab, etc.)
+type SmartEntry struct {
+	widget.Entry
+	onEnter func()
+}
+
+func NewSmartEntry(placeholder string) *SmartEntry {
+	e := &SmartEntry{}
+	e.ExtendBaseWidget(e)
+	e.SetPlaceHolder(placeholder)
+	e.Text = placeholder
+	return e
+}
+
+func (e *SmartEntry) SetOnEnter(f func()) {
+	e.onEnter = f
+}
+
+// TypedKey intercepts key presses to handle Enter/Return
+func (e *SmartEntry) TypedKey(key *fyne.KeyEvent) {
+	if key.Name == fyne.KeyReturn || key.Name == fyne.KeyEnter {
+		if e.onEnter != nil {
+			e.onEnter()
+		}
+		// We consume the event so it doesn't add a newline
+		return
+	}
+	// Delegate to base implementation for all other keys (navigation, typing)
+	e.Entry.TypedKey(key)
+}
+
+// TypedShortcut ensures standard shortcuts (Copy/Paste/SelectAll) work
+func (e *SmartEntry) TypedShortcut(shortcut fyne.Shortcut) {
+	// Fyne's base Entry handles Cut/Copy/Paste/SelectAll.
+	// We strictly pass it through to ensure native OS behavior (Cmd+A / Ctrl+A).
+	e.Entry.TypedShortcut(shortcut)
+}
+
+// Ensure interface compliance
+var _ fyne.Focusable = (*SmartEntry)(nil)
+var _ fyne.Widget = (*SmartEntry)(nil)
+var _ desktop.Keyable = (*SmartEntry)(nil)
+
 // --- TOOL 1: Sell To Cover (Options) ---
 func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 	// --- INPUT FIELDS ---
-	exSharesEntry := newEntry("0", "Exercised Shares")
-	exPriceEntry := newEntry("0.00", "Exercise Price")
-	fmvEntry := newEntry("0.00", "Fair Market Value")
+	// Using SmartEntry for "Enter to Calculate" support
+	exSharesEntry := NewSmartEntry("0")
+	exPriceEntry := NewSmartEntry("0.00")
+	fmvEntry := NewSmartEntry("0.00")
 
-	fedTaxEntry := newEntry("0.22", "Federal (0.22)")
-	medTaxEntry := newEntry("0.0145", "Medicare (0.0145)")
-	ssTaxEntry := newEntry("0.062", "Social Security (0.062)")
-	stateTaxEntry := newEntry("0.00", "State (e.g. 0.09)")
-	localTaxEntry := newEntry("0.00", "Local/SDI (e.g. 0.01)")
-	commRateEntry := newEntry("0.03", "Commission Rate (0.03)")
-	minFeeEntry := newEntry("25.00", "Min Fee (25.00)")
+	fedTaxEntry := NewSmartEntry("0.22")
+	medTaxEntry := NewSmartEntry("0.0145")
+	ssTaxEntry := NewSmartEntry("0.062")
+	stateTaxEntry := NewSmartEntry("0.00")
+	localTaxEntry := NewSmartEntry("0.00")
+	commRateEntry := NewSmartEntry("0.03")
+	minFeeEntry := NewSmartEntry("25.00")
 
 	// --- OUTPUT LABELS ---
 	lblNetShares := canvas.NewText("-", theme.PrimaryColor())
@@ -106,6 +153,16 @@ func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 		lblFees.SetText(fmt.Sprintf("$%.2f", result.BrokerFees))
 	}
 
+	// Attach Enter key handler to all inputs
+	inputs := []*SmartEntry{
+		exSharesEntry, exPriceEntry, fmvEntry,
+		fedTaxEntry, medTaxEntry, ssTaxEntry, stateTaxEntry, localTaxEntry,
+		commRateEntry, minFeeEntry,
+	}
+	for _, e := range inputs {
+		e.SetOnEnter(calculateFunc)
+	}
+
 	// --- LAYOUT ---
 	calcBtn := widget.NewButtonWithIcon("CALCULATE", theme.ConfirmIcon(), calculateFunc)
 	calcBtn.Importance = widget.HighImportance
@@ -142,7 +199,6 @@ func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 	))
 
 	// Result Layout using Grid
-	// Summary in a 2-column top row
 	summaryGrid := container.NewGridWithColumns(2,
 		container.New(layout.NewFormLayout(), widget.NewLabel("Net Shares:"), lblNetShares),
 		container.New(layout.NewFormLayout(), widget.NewLabel("Residual:"), lblResidual),
@@ -151,7 +207,7 @@ func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 	// Details in a 2-column grid
 	detailsLeft := widget.NewForm(
 		widget.NewFormItem("Shares Sold:", lblSharesSold),
-		widget.NewFormItem("Gross Proceeds:", lblGrossProceeds),
+		widget.NewFormItem("Sale Proceeds:", lblGrossProceeds), // Clarified Label
 	)
 
 	detailsRight := widget.NewForm(
@@ -181,21 +237,21 @@ func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 	// --- INPUT FIELDS ---
 	// RSU Specific Inputs
-	sharesReleasedEntry := newEntry("0", "Shares Released")
-	vestPriceEntry := newEntry("0.00", "Release (FMV)")
-	salePriceEntry := newEntry("0.00", "Est. Sale Price")
+	sharesReleasedEntry := NewSmartEntry("0")
+	vestPriceEntry := NewSmartEntry("0.00")
+	salePriceEntry := NewSmartEntry("0.00")
 
 	// Tax Inputs (Defaults matching existing)
-	fedTaxEntry := newEntry("0.22", "Federal (0.22)")
-	medTaxEntry := newEntry("0.0145", "Medicare (0.0145)")
-	ssTaxEntry := newEntry("0.062", "Social Security (0.062)")
-	stateTaxEntry := newEntry("0.00", "State (e.g. 0.09)")
-	localTaxEntry := newEntry("0.00", "Local/SDI (e.g. 0.01)")
+	fedTaxEntry := NewSmartEntry("0.22")
+	medTaxEntry := NewSmartEntry("0.0145")
+	ssTaxEntry := NewSmartEntry("0.062")
+	stateTaxEntry := NewSmartEntry("0.00")
+	localTaxEntry := NewSmartEntry("0.00")
 
 	// Broker Inputs
-	commRateEntry := newEntry("0.03", "Commission Rate (0.03)")
-	minFeeEntry := newEntry("25.00", "Min Fee (25.00)")
-	flatFeeEntry := newEntry("0.00", "Processing Fee ($)")
+	commRateEntry := NewSmartEntry("0.03")
+	minFeeEntry := NewSmartEntry("25.00")
+	flatFeeEntry := NewSmartEntry("0.00")
 
 	// --- OUTPUT LABELS ---
 	lblNetShares := canvas.NewText("-", theme.PrimaryColor())
@@ -206,10 +262,10 @@ func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 	lblResidual.TextSize = 24
 	lblResidual.TextStyle = fyne.TextStyle{Bold: true}
 
+	lblTotalValue := widget.NewLabel("-") // New Label to show Total Grant Value
 	lblSharesSold := widget.NewLabel("-")
 	lblTotalCost := widget.NewLabel("-")
 	lblGrossProceeds := widget.NewLabel("-")
-	lblTaxableGain := widget.NewLabel("-")
 	lblTaxes := widget.NewLabel("-")
 	lblFees := widget.NewLabel("-")
 
@@ -268,12 +324,24 @@ func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 		lblResidual.Text = fmt.Sprintf("$%.2f", result.Residual)
 		lblResidual.Refresh()
 
+		// Show Taxable Gain as "Total Value" to clarify what the user likely expects
+		lblTotalValue.SetText(fmt.Sprintf("$%.2f", result.TaxableGain))
+
 		lblSharesSold.SetText(fmt.Sprintf("%.0f", result.SharesToSell))
 		lblTotalCost.SetText(fmt.Sprintf("$%.2f", result.TotalCosts))
 		lblGrossProceeds.SetText(fmt.Sprintf("$%.2f", result.EstGrossProceeds))
-		lblTaxableGain.SetText(fmt.Sprintf("$%.2f", result.TaxableGain))
 		lblTaxes.SetText(fmt.Sprintf("$%.2f", result.TotalTax))
 		lblFees.SetText(fmt.Sprintf("$%.2f", result.TotalFees))
+	}
+
+	// Attach Enter key handler
+	inputs := []*SmartEntry{
+		sharesReleasedEntry, vestPriceEntry, salePriceEntry,
+		fedTaxEntry, medTaxEntry, ssTaxEntry, stateTaxEntry, localTaxEntry,
+		commRateEntry, minFeeEntry, flatFeeEntry,
+	}
+	for _, e := range inputs {
+		e.SetOnEnter(calculateFunc)
 	}
 
 	// --- LAYOUT ---
@@ -319,9 +387,9 @@ func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 	)
 
 	detailsLeft := widget.NewForm(
-		widget.NewFormItem("Taxable Gain:", lblTaxableGain),
+		widget.NewFormItem("Total Grant Value:", lblTotalValue), // Renamed from Taxable Gain to be clearer
 		widget.NewFormItem("Shares Sold:", lblSharesSold),
-		widget.NewFormItem("Gross Proceeds:", lblGrossProceeds),
+		widget.NewFormItem("Sale Proceeds:", lblGrossProceeds), // Clarified label (was Gross Proceeds)
 	)
 
 	detailsRight := widget.NewForm(
@@ -491,12 +559,6 @@ func makeCalculatorTab() fyne.CanvasObject {
 }
 
 // --- SHARED HELPERS ---
-func newEntry(placeholder, label string) *widget.Entry {
-	e := widget.NewEntry()
-	e.SetPlaceHolder(placeholder)
-	e.Text = placeholder
-	return e
-}
 
 func parseFloat(s string) (float64, error) {
 	if s == "" {

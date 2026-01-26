@@ -16,7 +16,7 @@ func main() {
 	myApp := app.New()
 	myApp.SetIcon(fyne.NewStaticResource("appicon.png", appIcon))
 	myWindow := myApp.NewWindow("Fynance")
-	myWindow.Resize(fyne.NewSize(400, 400)) // Slightly wider for tabs
+	myWindow.Resize(fyne.NewSize(500, 400)) // Slightly wider for tabs
 	myApp.Settings().SetTheme(newCustomTheme())
 
 	// Create the individual tool interfaces
