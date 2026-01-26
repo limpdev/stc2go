@@ -135,7 +135,7 @@ func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 		container.NewTabItem("Service", brokerForm),
 	)
 
-	inputCard := widget.NewCard("Configuration", "", container.NewVBox(
+	inputCard := widget.NewCard("Stock Options", "", container.NewVBox(
 		inputTabs,
 		layout.NewSpacer(),
 		calcBtn,
@@ -162,12 +162,10 @@ func makeSTCTab(win fyne.Window) fyne.CanvasObject {
 
 	detailsGrid := container.NewGridWithColumns(2, detailsLeft, detailsRight)
 
-	resultCard := widget.NewCard("Results", "Options",
-		container.NewVBox(
-			summaryGrid,
-			widget.NewSeparator(),
-			detailsGrid,
-		),
+	resultCard := container.NewVBox(
+		summaryGrid,
+		widget.NewSeparator(),
+		detailsGrid,
 	)
 
 	content := container.NewVBox(
@@ -308,7 +306,7 @@ func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 		container.NewTabItem("Service", brokerForm),
 	)
 
-	inputCard := widget.NewCard("RSU Configuration", "", container.NewVBox(
+	inputCard := widget.NewCard("Restricted Stock", "", container.NewVBox(
 		inputTabs,
 		layout.NewSpacer(),
 		calcBtn,
@@ -334,12 +332,10 @@ func makeRSUTab(win fyne.Window) fyne.CanvasObject {
 
 	detailsGrid := container.NewGridWithColumns(2, detailsLeft, detailsRight)
 
-	resultCard := widget.NewCard("Results", "Restricted Stock",
-		container.NewVBox(
-			summaryGrid,
-			widget.NewSeparator(),
-			detailsGrid,
-		),
+	resultCard := container.NewVBox(
+		summaryGrid,
+		widget.NewSeparator(),
+		detailsGrid,
 	)
 
 	content := container.NewVBox(

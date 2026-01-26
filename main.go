@@ -16,7 +16,7 @@ func main() {
 	myApp := app.New()
 	myApp.SetIcon(fyne.NewStaticResource("appicon.png", appIcon))
 	myWindow := myApp.NewWindow("Fynance")
-	myWindow.Resize(fyne.NewSize(650, 650)) // Slightly wider for tabs
+	myWindow.Resize(fyne.NewSize(400, 400)) // Slightly wider for tabs
 	myApp.Settings().SetTheme(newCustomTheme())
 
 	// Create the individual tool interfaces
@@ -26,9 +26,9 @@ func main() {
 
 	// Create the navigation tabs
 	tabs := container.NewAppTabs(
-		container.NewTabItemWithIcon("Options", theme.DocumentIcon(), stcTab), // Renamed for clarity
-		container.NewTabItemWithIcon("Shares", theme.AccountIcon(), rsuTab),   // New Tab
-		container.NewTabItemWithIcon("Keys", theme.ContentAddIcon(), calcTab),
+		container.NewTabItemWithIcon("EXERCISE", theme.DocumentIcon(), stcTab), // Renamed for clarity
+		container.NewTabItemWithIcon("RELEASE", theme.AccountIcon(), rsuTab),   // New Tab
+		container.NewTabItemWithIcon("KEYS", theme.ContentAddIcon(), calcTab),
 	)
 
 	tabs.SetTabLocation(container.TabLocationTop)
